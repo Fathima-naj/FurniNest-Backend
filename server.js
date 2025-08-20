@@ -16,7 +16,7 @@ const app=express();
 connectDB();
 
 const corsOptions = {
-    origin:process.env.CLIENT_URL, // Add frontend URL here,
+    origin:[process.env.CLIENT_URL,process.env.FOREIGN_URL], // Add frontend URL here,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"], // Allowed methods
     credentials: true, // Allow credentials (cookies, HTTP authentication)
   };
