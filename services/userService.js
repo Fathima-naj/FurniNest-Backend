@@ -4,36 +4,65 @@ const bcrypt=require('bcryptjs')
 const {generateAccessToken,verifyToken}=require('../utilis/jwt')
 
 //register user service
-exports.userResgisterServices=async(data)=>{
-    const userExist=await User.findOne({email:data.email})
-    if(userExist){
-        throw new CustomError("User already exist",400)
+exports.userResgisterServices = async (data) => {
+    const email = data.email.trim().toLowerCase();
+
+    const userExist = await User.findOne({ email });
+
+    if (userExist) {
+        throw new CustomError("User already exists", 400);
     }
-    const hashPassword=await bcrypt.hash(data.password,10)
-    const newUser=new User({
-        name:data.name,
-        email:data.email,
-        password:hashPassword,
-        username:data.username,
+
+    const hashPassword = await bcrypt.hash(data.password, 10);
+
+    const newUser = new User({
+        name: data.name,
+        email,
+        password: hashPassword,
+        username: data.username,
     });
-    const savedUser=await newUser.save()
+
+    const savedUser = await newUser.save();
+
     return savedUser._id;
-}
+};
 
 
 //login user service
-exports.userLoginServices=async(email,password)=>{
-    const userData=await User.findOne({email})
-    if(!userData){
-        throw new CustomError("Invalid email or Password",401)
+exports.userLoginServices = async (email, password) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const userData = await User.findOne({
+        email: normalizedEmail
+    });
+
+    if (!userData) {
+        console.log("Login failed: User not found");
+        throw new CustomError("Invalid email or password", 401);
     }
-    const isMatch=await bcrypt.compare(password,userData.password)
-    if(!isMatch){
-        throw new CustomError("Invalid Email or Password",401)
+
+    if (!userData.password) {
+        throw new CustomError("This account uses Google sign-in", 401);
     }
-   console.log('user logged in successfully')
-    return userData
-}
+
+    const isMatch = await bcrypt.compare(
+        password,
+        userData.password
+    );
+
+    console.log("Password match:", isMatch);
+
+    if (!isMatch) {
+        console.log("Login failed: Password mismatch");
+        throw new CustomError("Invalid email or password", 401);
+    }
+
+    if (userData.isBlock) {
+        throw new CustomError("Your account has been blocked", 403);
+    }
+
+    return userData;
+};
 
 exports.refreshAccessTokenService=async(refreshToken)=>{
 
@@ -54,9 +83,13 @@ exports.refreshAccessTokenService=async(refreshToken)=>{
     return {newAccessToken}
 }
 
+
 exports.getUserDetails = async (id) => {
-    const user = await User.findById(id).select('username role');
-    return user;
+  const user = await User.findById(id).select(
+    "name email username isAdmin isEmailVerified"
+  );
+
+  return user;
 };
 
 exports.logoutUserService=async()=>{
