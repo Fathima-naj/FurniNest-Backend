@@ -4,7 +4,7 @@ const{verifyToken}=require('../utilis/jwt')
 
 const authenticate=async(req,res,next)=>{
     try{
-        console.log("cookies",req.cookies)
+        
         const token=req.cookies.accessToken
         // if(!token && req.cookies.refreshToken){
         //     throw new CustomError('Access token is missing',401)
@@ -21,6 +21,9 @@ const authenticate=async(req,res,next)=>{
         if(!user){
             throw new CustomError('user not found',404)
         }
+        if (user.isBlock) {
+  throw new CustomError("Your account is blocked", 403);
+}
         req.user=user
         next()
      }catch(err){
