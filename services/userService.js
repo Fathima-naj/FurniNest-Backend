@@ -88,6 +88,74 @@ exports.userResgisterServices = async (data) => {
 
 
 
+exports.resendOtpService = async (email) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const pendingUser = await PendingRegistration.findOne({
+        email: normalizedEmail,
+    });
+
+    if (!pendingUser) {
+        throw new CustomError(
+            "Registration not found. Please register again.",
+            404
+        );
+    }
+
+    const now = Date.now();
+
+    if (pendingUser.expiresAt <= new Date(now)) {
+        await PendingRegistration.deleteOne({
+            _id: pendingUser._id,
+        });
+
+        throw new CustomError(
+            "Registration expired. Please register again.",
+            400
+        );
+    }
+
+    // Check 60-second resend cooldown
+    if (pendingUser.resendAvailableAt > new Date(now)) {
+        const remainingSeconds = Math.ceil(
+            (pendingUser.resendAvailableAt.getTime() - now) / 1000
+        );
+
+        throw new CustomError(
+            `Please wait ${remainingSeconds} seconds before requesting another OTP.`,
+            429
+        );
+    }
+
+    // Generate a new OTP
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    const otpHash = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+
+    // Send email before replacing the previous OTP
+    try {
+        await sendOtpEmail(normalizedEmail, otp);
+    } catch (error) {
+        throw new CustomError(
+            "Unable to send OTP. Please try again.",
+            500
+        );
+    }
+
+    // Update OTP details
+    pendingUser.otpHash = otpHash;
+    pendingUser.otpExpiresAt = new Date(now + 5 * 60 * 1000);
+    pendingUser.resendAvailableAt = new Date(now + 60 * 1000);
+    pendingUser.attempts = 0;
+
+    await pendingUser.save();
+
+    return true;
+};
+
 
 //login user service
 exports.userLoginServices = async (email, password) => {

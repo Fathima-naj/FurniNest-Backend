@@ -1,5 +1,5 @@
 const {registerValidation,loginValidation}=require('../validation/userValidation')
-const {userResgisterServices,refreshAccessTokenService, userLoginServices, getUserDetails, logoutUserService}=require('../services/userService')
+const {userResgisterServices,refreshAccessTokenService, userLoginServices, getUserDetails, logoutUserService,resendOtpService}=require('../services/userService')
 const CustomError=require('../utilis/customError')
 const asyncHandler=require('../utilis/asyncHandler')
 const STATUS=require('../utilis/constants')
@@ -212,6 +212,22 @@ exports.verifyEmailOtp = asyncHandler(async (req, res) => {
     res.status(201).json({
         status: STATUS.SUCCESS,
         message: "Email verified and account created successfully.",
+    });
+});
+
+
+exports.resendOtp = asyncHandler(async (req, res) => {
+    const email = req.body.email;
+
+    if (!email || typeof email !== "string") {
+        throw new CustomError("Email is required", 400);
+    }
+
+    await resendOtpService(email);
+
+    res.status(200).json({
+        status: STATUS.SUCCESS,
+        message: "A new OTP has been sent to your email.",
     });
 });
 
