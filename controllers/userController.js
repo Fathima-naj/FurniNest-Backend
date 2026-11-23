@@ -5,6 +5,10 @@ const asyncHandler=require('../utilis/asyncHandler')
 const STATUS=require('../utilis/constants')
 const { generateAccessToken, generateRefreshToken } = require('../utilis/jwt')
 
+const crypto = require("crypto");
+const PendingRegistration = require("../models/PendingRegistration");
+
+
 
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
@@ -120,16 +124,97 @@ exports.googleLogin = asyncHandler(async (req, res) => {
 });
 
 
-exports.registerUser=asyncHandler(async(req,res)=>{
 
-    const data=req.body;
-    const {error}=registerValidation.validate(data)
-    if(error) throw new CustomError(error.details[0].message,400)
+exports.registerUser = asyncHandler(async (req, res) => {
+    const data = req.body;
+
+    const { error } = registerValidation.validate(data);
+
+    if (error) {
+        throw new CustomError(error.details[0].message, 400);
+    }
+
     await userResgisterServices(data);
+
+    res.status(200).json({
+        status: STATUS.SUCCESS,
+        message: "OTP sent successfully. Please verify your email.",
+    });
+});
+
+
+exports.verifyEmailOtp = asyncHandler(async (req, res) => {
+    const email = req.body.email?.trim().toLowerCase();
+    const otp = req.body.otp?.trim();
+
+    if (!email || !otp || !/^\d{6}$/.test(otp)) {
+        throw new CustomError("Please enter a valid 6-digit OTP", 400);
+    }
+
+    const pendingUser = await PendingRegistration.findOne({ email });
+
+    if (!pendingUser) {
+        throw new CustomError(
+            "Registration not found. Please register again.",
+            404
+        );
+    }
+
+    if (pendingUser.expiresAt <= new Date()) {
+        await PendingRegistration.deleteOne({ _id: pendingUser._id });
+
+        throw new CustomError("Registration expired. Please register again.", 400);
+    }
+
+    if (pendingUser.otpExpiresAt <= new Date()) {
+        throw new CustomError("OTP expired. Please request a new OTP.", 400);
+    }
+
+    if (pendingUser.attempts >= 5) {
+        throw new CustomError("Too many incorrect attempts. Request a new OTP.", 429);
+    }
+
+    const submittedHash = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+
+    const isOtpValid = crypto.timingSafeEqual(
+        Buffer.from(submittedHash, "hex"),
+        Buffer.from(pendingUser.otpHash, "hex")
+    );
+
+    if (!isOtpValid) {
+        pendingUser.attempts += 1;
+        await pendingUser.save();
+
+        throw new CustomError("Invalid OTP. Please try again.", 400);
+    }
+
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+        await PendingRegistration.deleteOne({ _id: pendingUser._id });
+        throw new CustomError("User already exists", 409);
+    }
+
+    await User.create({
+        name: pendingUser.name,
+        username: pendingUser.username,
+        email: pendingUser.email,
+        password: pendingUser.password,
+        isEmailVerified: true,
+        authProvider: "local",
+    });
+
+    await PendingRegistration.deleteOne({ _id: pendingUser._id });
+
     res.status(201).json({
-        status:STATUS.SUCCESS,
-        message:"User registered successfully"})
-})
+        status: STATUS.SUCCESS,
+        message: "Email verified and account created successfully.",
+    });
+});
+
 
 
 exports.loginUser=asyncHandler(async(req,res)=>{

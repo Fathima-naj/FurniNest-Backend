@@ -3,29 +3,90 @@ const CustomError=require('../utilis/customError')
 const bcrypt=require('bcryptjs')
 const {generateAccessToken,verifyToken}=require('../utilis/jwt')
 
+const crypto = require("crypto");
+const PendingRegistration = require("../models/PendingRegistration");
+const { sendOtpEmail } = require("../utilis/sendEmail");
+
 //register user service
+
+
 exports.userResgisterServices = async (data) => {
     const email = data.email.trim().toLowerCase();
 
+    // Check whether the user already exists
     const userExist = await User.findOne({ email });
 
     if (userExist) {
         throw new CustomError("User already exists", 400);
     }
 
-    const hashPassword = await bcrypt.hash(data.password, 10);
+    // Generate username automatically
+    const baseUsername =
+        email.split("@")[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "")
+        .slice(0, 10) || "user";
 
-    const newUser = new User({
-        name: data.name,
-        email,
-        password: hashPassword,
-        username: data.username,
-    });
+    let username = baseUsername;
 
-    const savedUser = await newUser.save();
+    while (
+        await User.exists({ username }) ||
+        await PendingRegistration.exists({ username })
+    ) {
+        const suffix = crypto.randomInt(1000, 10000);
+        username = `${baseUsername}_${suffix}`;
+    }
 
-    return savedUser._id;
+    // Hash password
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    // Generate 6-digit OTP
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    // Hash OTP before storing
+    const otpHash = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+
+    const now = Date.now();
+
+    // Store pending registration
+    const pendingUser = await PendingRegistration.findOneAndUpdate(
+        { email },
+        {
+            name: data.name,
+            username,
+            email,
+            password: hashedPassword,
+            otpHash,
+            otpExpiresAt: new Date(now + 5 * 60 * 1000),
+            resendAvailableAt: new Date(now + 60 * 1000),
+            expiresAt: new Date(now + 30 * 60 * 1000),
+            attempts: 0,
+        },
+        {
+            upsert: true,
+            new: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+        }
+    );
+
+    try {
+        await sendOtpEmail(email, otp);
+    } catch (error) {
+        await PendingRegistration.deleteOne({
+            _id: pendingUser._id,
+        });
+
+        throw new CustomError("Unable to send verification email", 500);
+    }
+
+    return true;
 };
+
+
 
 
 //login user service

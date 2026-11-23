@@ -1,49 +1,71 @@
-const joi=require('joi')
 
-const registerValidation=joi.object({
-    name:joi.string(),
-    username:joi.string()
+const Joi = require("joi");
+
+const registerValidation = Joi.object({
+  name: Joi.string()
+    .trim()
+    .min(2)
+    .required()
+    .messages({
+      "string.empty": "Name is required.",
+      "string.min": "Name must contain at least 2 characters.",
+      "any.required": "Name is required.",
+    }),
+
+  // Optional for backward compatibility.
+  // Backend will generate one when omitted.
+  username: Joi.string()
+    .trim()
     .min(4)
     .max(15)
     .pattern(/^[a-zA-Z0-9_]+$/)
-    .required()
+    .optional()
     .messages({
-        'string.min':'Username must be at least 4 characters.',
-        'string.max': 'Username must not exceed 15 characters.',
-        'string.empty': 'Username is required.',
-        'string.pattern.base': 'Username can only contain numbers,letters and underscores(_).',
+      "string.min": "Username must be at least 4 characters.",
+      "string.max": "Username must not exceed 15 characters.",
+      "string.pattern.base":
+        "Username can only contain letters, numbers and underscores.",
     }),
-    email:joi.string()
+
+  email: Joi.string()
+    .trim()
+    .lowercase()
     .email()
     .required()
     .messages({
-        'string.email':'Please enter a valid email address.',
-        'string.empty':'Email is required.'
+      "string.email": "Please enter a valid email address.",
+      "string.empty": "Email is required.",
+      "any.required": "Email is required.",
     }),
-    password:joi.string()
-    .min(6)
+
+  password: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[@$!%*?&#]).+$/)
     .required()
     .messages({
-        'string.min':'Password must be at least contain 6 characters.',
-        'string.empty':'Password is required.'
+      "string.min": "Password must contain at least 8 characters.",
+      "string.pattern.base":
+        "Password must contain uppercase, lowercase, number and special character.",
+      "string.empty": "Password is required.",
     }),
-    isAdmin: joi.boolean().optional() 
 });
 
-
-const loginValidation=joi.object({
-    email:joi.string()
-    .required()
+const loginValidation = Joi.object({
+  email: Joi.string()
+    .trim()
+    .lowercase()
     .email()
-    .message({
-        'string.email':'Please Enter a valid email address.',
-        'string.empty':'Email is required.'
-    }),
-    password:joi.string()
     .required()
     .messages({
-        'string.empty':'Password is required.'
+      "string.email": "Please enter a valid email address.",
+      "string.empty": "Email is required.",
+    }),
+
+  password: Joi.string()
+    .required()
+    .messages({
+      "string.empty": "Password is required.",
     }),
 });
 
-module.exports={registerValidation,loginValidation};
+module.exports = { registerValidation, loginValidation };

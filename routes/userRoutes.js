@@ -9,6 +9,7 @@ const {
   getLoggedInUser,
   logoutUser,
   refreshToken,
+  verifyEmailOtp
 } = require("../controllers/userController");
 
 const authenticate = require("../middlewares/authMiddleware");
@@ -24,5 +25,6 @@ router.get("/me", authenticate, getLoggedInUser);
 
 // Logout
 router.post("/logout", logoutUser);
+router.post("/verify-otp", verifyEmailOtp);
 
 module.exports = router;
