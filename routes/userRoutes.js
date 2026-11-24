@@ -10,7 +10,10 @@ const {
   logoutUser,
   refreshToken,
   verifyEmailOtp,
-  resendOtp
+  resendOtp,
+  forgotPassword,
+  verifyPasswordResetOtp,
+  resetPassword
 } = require("../controllers/userController");
 
 const authenticate = require("../middlewares/authMiddleware");
@@ -26,7 +29,14 @@ router.get("/me", authenticate, getLoggedInUser);
 
 // Logout
 router.post("/logout", logoutUser);
+
+//otp
 router.post("/verify-otp", verifyEmailOtp);
 router.post("/resend-otp", resendOtp);
+
+// Password reset routes
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-otp", verifyPasswordResetOtp);
+router.post("/reset-password", resetPassword);
 
 module.exports = router;

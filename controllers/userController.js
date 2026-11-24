@@ -1,17 +1,18 @@
 const {registerValidation,loginValidation}=require('../validation/userValidation')
-const {userResgisterServices,refreshAccessTokenService, userLoginServices, getUserDetails, logoutUserService,resendOtpService}=require('../services/userService')
+const {userResgisterServices,refreshAccessTokenService, userLoginServices,resetPasswordService,forgotPasswordService,verifyPasswordResetOtpService, getUserDetails, logoutUserService,resendOtpService}=require('../services/userService')
 const CustomError=require('../utilis/customError')
 const asyncHandler=require('../utilis/asyncHandler')
 const STATUS=require('../utilis/constants')
 const { generateAccessToken, generateRefreshToken } = require('../utilis/jwt')
 
+//otp
 const crypto = require("crypto");
 const PendingRegistration = require("../models/PendingRegistration");
 
-
-
+//google auth
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
+
 
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID
@@ -231,6 +232,71 @@ exports.resendOtp = asyncHandler(async (req, res) => {
     });
 });
 
+// Forgot password - send OTP
+exports.forgotPassword = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    if (!email || typeof email !== "string") {
+        throw new CustomError("Valid email is required", 400);
+    }
+
+    await forgotPasswordService(email);
+
+    res.status(200).json({
+        status: STATUS.SUCCESS,
+        message: "If an account exists, a password reset OTP has been sent.",
+    });
+});
+
+
+// Verify password reset OTP
+exports.verifyPasswordResetOtp = asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
+
+    if (
+        !email ||
+        typeof email !== "string" ||
+        !otp ||
+        !/^\d{6}$/.test(otp)
+    ) {
+        throw new CustomError("Valid email and 6-digit OTP are required", 400);
+    }
+
+    await verifyPasswordResetOtpService(email, otp);
+
+    res.status(200).json({
+        status: STATUS.SUCCESS,
+        message: "OTP verified successfully.",
+    });
+});
+
+
+// Reset password
+exports.resetPassword = asyncHandler(async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+
+   if (
+    !email ||
+    typeof email !== "string" ||
+    !otp ||
+    !/^\d{6}$/.test(otp) ||
+    !newPassword ||
+    typeof newPassword !== "string" ||
+    newPassword.length < 6
+) {
+    throw new CustomError(
+        "Email, valid OTP and password (minimum 6 characters) are required",
+        400
+    );
+}
+
+    await resetPasswordService(email, otp, newPassword);
+
+    res.status(200).json({
+        status: STATUS.SUCCESS,
+        message: "Password reset successfully.",
+    });
+});
 
 
 exports.loginUser=asyncHandler(async(req,res)=>{

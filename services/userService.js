@@ -3,12 +3,15 @@ const CustomError=require('../utilis/customError')
 const bcrypt=require('bcryptjs')
 const {generateAccessToken,verifyToken}=require('../utilis/jwt')
 
+//otp
 const crypto = require("crypto");
 const PendingRegistration = require("../models/PendingRegistration");
 const { sendOtpEmail } = require("../utilis/sendEmail");
 
-//register user service
+//reset password
+const PasswordReset = require("../models/PasswordReset");
 
+//register user service
 
 exports.userResgisterServices = async (data) => {
     const email = data.email.trim().toLowerCase();
@@ -224,3 +227,186 @@ exports.getUserDetails = async (id) => {
 exports.logoutUserService=async()=>{
     return true;
 }
+
+// Generate password reset OTP
+exports.forgotPasswordService = async (email) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({
+        email: normalizedEmail,
+    });
+
+    if (!user) {
+        throw new CustomError("No account found with this email", 404);
+    }
+
+    if (!user.password) {
+        throw new CustomError(
+            "This account uses Google sign-in",
+            400
+        );
+    }
+
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    const otpHash = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+
+    const now = Date.now();
+
+    const resetData = await PasswordReset.findOneAndUpdate(
+        { email: normalizedEmail },
+        {
+            otpHash,
+            otpExpiresAt: new Date(now + 5 * 60 * 1000),
+            resendAvailableAt: new Date(now + 60 * 1000),
+            expiresAt: new Date(now + 15 * 60 * 1000),
+            attempts: 0,
+        },
+        {
+            upsert: true,
+            new: true,
+            runValidators: true,
+        }
+    );
+
+    try {
+        await sendOtpEmail(normalizedEmail, otp);
+    } catch (error) {
+        await PasswordReset.deleteOne({ _id: resetData._id });
+
+        throw new CustomError(
+            "Unable to send password reset OTP",
+            500
+        );
+    }
+
+    return true;
+};
+
+// Verify password reset OTP
+exports.verifyPasswordResetOtpService = async (email, otp) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const resetData = await PasswordReset.findOne({
+        email: normalizedEmail,
+    });
+
+    if (!resetData) {
+        throw new CustomError(
+            "Invalid or expired OTP",
+            400
+        );
+    }
+
+    const now = Date.now();
+
+    if (
+        resetData.expiresAt <= new Date(now) ||
+        resetData.otpExpiresAt <= new Date(now)
+    ) {
+        await PasswordReset.deleteOne({
+            _id: resetData._id,
+        });
+
+        throw new CustomError(
+            "OTP has expired. Please request a new one.",
+            400
+        );
+    }
+
+    if (resetData.attempts >= 5) {
+        await PasswordReset.deleteOne({
+            _id: resetData._id,
+        });
+
+        throw new CustomError(
+            "Too many incorrect attempts. Request a new OTP.",
+            429
+        );
+    }
+
+    const hashedOtp = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+
+    const isMatch = crypto.timingSafeEqual(
+        Buffer.from(hashedOtp, "hex"),
+        Buffer.from(resetData.otpHash, "hex")
+    );
+
+    if (!isMatch) {
+        resetData.attempts += 1;
+        await resetData.save();
+
+        throw new CustomError(
+            "Invalid OTP",
+            400
+        );
+    }
+
+    return true;
+};
+
+// Reset password
+exports.resetPasswordService = async (email, otp, newPassword) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const resetData = await PasswordReset.findOne({
+        email: normalizedEmail,
+    });
+
+    if (!resetData) {
+        throw new CustomError("Invalid or expired OTP", 400);
+    }
+
+    const now = Date.now();
+
+    if (
+        resetData.expiresAt <= new Date(now) ||
+        resetData.otpExpiresAt <= new Date(now)
+    ) {
+        await PasswordReset.deleteOne({ _id: resetData._id });
+
+        throw new CustomError("OTP expired. Request a new one.", 400);
+    }
+
+    if (resetData.attempts >= 5) {
+        await PasswordReset.deleteOne({ _id: resetData._id });
+
+        throw new CustomError("Too many incorrect attempts.", 429);
+    }
+
+    const hashedOtp = crypto
+        .createHash("sha256")
+        .update(otp)
+        .digest("hex");
+
+    const isMatch = crypto.timingSafeEqual(
+        Buffer.from(hashedOtp, "hex"),
+        Buffer.from(resetData.otpHash, "hex")
+    );
+
+    if (!isMatch) {
+        resetData.attempts += 1;
+        await resetData.save();
+
+        throw new CustomError("Invalid OTP", 400);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+        throw new CustomError("User not found", 404);
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    await PasswordReset.deleteOne({ _id: resetData._id });
+
+    return true;
+};
