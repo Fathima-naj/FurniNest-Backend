@@ -410,3 +410,39 @@ exports.resetPasswordService = async (email, otp, newPassword) => {
 
     return true;
 };
+
+// Update user profile
+exports.updateUserProfileService = async (userId, data) => {
+    const { name, username } = data;
+
+    if (!name?.trim() || !username?.trim()) {
+        throw new CustomError("Name and username are required", 400);
+    }
+
+    const existingUsername = await User.findOne({
+        username: username.trim(),
+        _id: { $ne: userId }
+    });
+
+    if (existingUsername) {
+        throw new CustomError("Username is already taken", 409);
+    }
+
+    const user = await User.findByIdAndUpdate(
+        userId,
+        {
+            name: name.trim(),
+            username: username.trim()
+        },
+        {
+            new: true,
+            runValidators: true
+        }
+    ).select("name username email isAdmin isEmailVerified");
+
+    if (!user) {
+        throw new CustomError("User not found", 404);
+    }
+
+    return user;
+};

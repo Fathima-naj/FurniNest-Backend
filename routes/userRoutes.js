@@ -7,6 +7,7 @@ const {
   loginUser,
   googleLogin,
   getLoggedInUser,
+  updateUserProfile,
   logoutUser,
   refreshToken,
   verifyEmailOtp,
@@ -26,6 +27,7 @@ router.post("/refreshToken", refreshToken);
 
 // Protected route
 router.get("/me", authenticate, getLoggedInUser);
+router.put("/me", authenticate, updateUserProfile);
 
 // Logout
 router.post("/logout", logoutUser);

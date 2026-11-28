@@ -1,5 +1,16 @@
 const {registerValidation,loginValidation}=require('../validation/userValidation')
-const {userResgisterServices,refreshAccessTokenService, userLoginServices,resetPasswordService,forgotPasswordService,verifyPasswordResetOtpService, getUserDetails, logoutUserService,resendOtpService}=require('../services/userService')
+const {
+    userResgisterServices,
+    refreshAccessTokenService,
+    userLoginServices,
+    resetPasswordService,
+    forgotPasswordService,
+    verifyPasswordResetOtpService,
+    getUserDetails,
+    logoutUserService,
+    resendOtpService,
+    updateUserProfileService
+} = require('../services/userService');
 const CustomError=require('../utilis/customError')
 const asyncHandler=require('../utilis/asyncHandler')
 const STATUS=require('../utilis/constants')
@@ -360,3 +371,16 @@ exports.logoutUser = asyncHandler(async (req, res) => {
     res.status(200).json({ message: 'Logged out successfully' });
   });
   
+// Update logged-in user's profile
+exports.updateUserProfile = asyncHandler(async (req, res) => {
+    const updatedUser = await updateUserProfileService(
+        req.user._id,
+        req.body
+    );
+
+    res.status(200).json({
+        status: STATUS.SUCCESS,
+        message: "Profile updated successfully",
+        user: updatedUser
+    });
+});
